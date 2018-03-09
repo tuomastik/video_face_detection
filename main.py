@@ -38,11 +38,11 @@ def get_gender_age_predictor():
                  cache_dir="age-gender-estimation")
 
     # Initialize neural network for gender and age prediction
-    resnet_im_size = 64
-    gender_age_predictor = WideResNet(image_size=resnet_im_size,
+    gender_age_pred_im_size = 64
+    gender_age_predictor = WideResNet(image_size=gender_age_pred_im_size,
                                       depth=16, k=8)()
     gender_age_predictor.load_weights(weights)
-    return gender_age_predictor
+    return gender_age_predictor, gender_age_pred_im_size
 
 
 def get_ffmpeg_path(ffprobe=False):
@@ -118,7 +118,8 @@ def round_to_lower_even(f):
     return np.floor(f / 2.) * 2
 
 
-def detect_genders_ages(gender_age_predictor, im, faces):
+def detect_genders_ages(gender_age_predictor, gender_age_pred_im_size,
+                        im, faces):
     genders_ages = []
     for face in faces:
         box = [(vertex.x, vertex.y) for vertex in face.bounding_poly.vertices]
@@ -129,7 +130,8 @@ def detect_genders_ages(gender_age_predictor, im, faces):
         h_center, w_center = [int(dim / 2) for dim in face_im.shape[:2]]
         face_im = face_im[h_center - half_wh: h_center + half_wh,
                           w_center - half_wh: w_center + half_wh, :]
-        face_im = imresize(face_im, (resnet_im_size, resnet_im_size))
+        face_im = imresize(face_im, (gender_age_pred_im_size,
+                                     gender_age_pred_im_size))
         face_im = np.expand_dims(face_im, axis=0)
         predictions = gender_age_predictor.predict(face_im)
         # Format predictions
@@ -196,7 +198,7 @@ def main(input_video_path, output_video_path,
          highlight_color='#00ff00', font_size=22,
          line_width_rectangle=5, line_width_face_parts=1):
 
-    gender_age_predictor = get_gender_age_predictor()
+    gender_age_predictor, gender_age_pred_im_size = get_gender_age_predictor()
 
     # Create directories for the video frames
     input_video_dir = os.path.dirname(input_video_path)
@@ -229,6 +231,7 @@ def main(input_video_path, output_video_path,
             if not faces or not genders_ages or i % 2 == 0:
                 faces = detect_face(im_bytes)
                 genders_ages = detect_genders_ages(gender_age_predictor,
+                                                   gender_age_pred_im_size,
                                                    np.array(im), faces)
 
             draw = ImageDraw.Draw(im)
