@@ -48,7 +48,7 @@ def get_gender_age_predictor():
 def get_ffmpeg_path(ffprobe=False):
     binary = "ffprobe" if ffprobe else "ffmpeg"
     if _platform == "linux" or _platform == "linux2":  # Linux
-        raise(Exception("I don't know where ffmpeg is installed :("))
+        return os.path.join(os.sep, "usr", "bin", binary)
     elif _platform == "darwin":  # macOS (OS X)
         return os.path.join(os.sep, "opt", "local", "bin", binary)
     elif _platform == "win32":  # Windows
@@ -186,7 +186,7 @@ def highlight_genders_ages(faces, genders_ages, draw, color='#00ff00',
         try:
             font = ImageFont.truetype("Montserrat-Bold.ttf", font_size)
         except Exception:
-            font = ImageFont.truetype("arial.ttf", font_size)
+            font = ImageFont.load_default()
         draw.text((box[0][0]+20, box[2][1]-120), "Ikä: %i" % age,
                   fill=color, font=font)
         draw.text((box[0][0]+20, box[2][1]-70), "Sukupuoli: %s" % gender,

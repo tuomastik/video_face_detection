@@ -16,16 +16,16 @@ git clone --recursive git@github.com:tuomastik/video_face_detection.git
 2. Prepare Python environment with [Conda](https://conda.io/docs/):
 
 ```shell
-conda create -n video_face_detection python=3.5 scipy numpy pillow keras tensorflow
+conda create -n video_face_detection python=3.5 scipy numpy pillow tensorflow keras
 source activate video_face_detection
 pip install google-cloud-vision==0.30.1
 ```
 
-3. Install [FFmpeg](https://github.com/FFmpeg/FFmpeg) for video processing.
+3. Install [FFmpeg](https://github.com/FFmpeg/FFmpeg) for video processing. On Linux, install by `sudo apt-get install ffmpeg`.
 
 4. Put your Google Cloud Platform [service account key](https://console.cloud.google.com/apis/credentials) in the root directory of this repository with a name `gcp_service_account_key.json`.
 
-4. Execute `main()` function in `main.py`. The script will start by downloading the weights for gender and age predictor:
+5. Execute `main()` function in `main.py`. The script will start by downloading the weights for gender and age predictor:
 
 ```python
 main(input_video_path="input.mp4",
