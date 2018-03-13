@@ -152,45 +152,33 @@ def highlight_faces_outlines(faces, draw, width, color):
 def highlight_faces_parts(faces, draw, width, color):
     for face in faces:
         # Left eye
-        draw.line([
-            (face.landmarks[17].position.x, face.landmarks[17].position.y),
-            (face.landmarks[18].position.x, face.landmarks[18].position.y),
-            (face.landmarks[19].position.x, face.landmarks[19].position.y),
-            (face.landmarks[16].position.x, face.landmarks[16].position.y),
-            (face.landmarks[17].position.x, face.landmarks[17].position.y)],
-            width=width, fill=color)
+        draw.line([(face.landmarks[ix].position.x,
+                    face.landmarks[ix].position.y) for ix in
+                   [17, 18, 19, 16, 17]], width=width, fill=color)
         # Right eye
-        draw.line([
-            (face.landmarks[21].position.x, face.landmarks[21].position.y),
-            (face.landmarks[22].position.x, face.landmarks[22].position.y),
-            (face.landmarks[23].position.x, face.landmarks[23].position.y),
-            (face.landmarks[24].position.x, face.landmarks[24].position.y),
-            (face.landmarks[21].position.x, face.landmarks[21].position.y)],
-            width=width, fill=color)
+        draw.line([(face.landmarks[ix].position.x,
+                    face.landmarks[ix].position.y) for ix in
+                   [21, 22, 23, 24, 21]], width=width, fill=color)
         # Mouth
-        draw.line([
-            (face.landmarks[10].position.x, face.landmarks[10].position.y),
-            (face.landmarks[8].position.x, face.landmarks[8].position.y),
-            (face.landmarks[11].position.x, face.landmarks[11].position.y),
-            (face.landmarks[9].position.x, face.landmarks[9].position.y),
-            (face.landmarks[10].position.x, face.landmarks[10].position.y),
-            (face.landmarks[12].position.x, face.landmarks[12].position.y),
-            (face.landmarks[11].position.x, face.landmarks[11].position.y)],
-            width=width, fill=color)
+        draw.line([(face.landmarks[ix].position.x,
+                    face.landmarks[ix].position.y) for ix in
+                   [10, 8, 11, 9, 10, 12, 11]], width=width, fill=color)
 
 
-def highlight_genders_ages(faces, genders_ages, draw, color='#00ff00',
-                           font_size=22):
+def highlight_genders_ages(faces, genders_ages, draw, color, font_size):
+    try:
+        font = ImageFont.truetype("Montserrat-Bold.ttf", font_size)
+    except Exception:
+        font = ImageFont.load_default()
+
+    width_offset, height_offset = 20, 30
+
     for face, (gender, age) in zip(faces, genders_ages):
         box = [(vertex.x, vertex.y) for vertex in face.bounding_poly.vertices]
-        try:
-            font = ImageFont.truetype("Montserrat-Bold.ttf", font_size)
-        except Exception:
-            font = ImageFont.load_default()
-        draw.text((box[0][0]+20, box[2][1]-120), "Ikä: %i" % age,
-                  fill=color, font=font)
-        draw.text((box[0][0]+20, box[2][1]-70), "Sukupuoli: %s" % gender,
-                  fill=color, font=font)
+        draw.text((box[0][0] + width_offset, box[2][1] - height_offset * 2),
+                  "Ikä: %i" % age, fill=color, font=font)
+        draw.text((box[0][0] + width_offset, box[2][1] - height_offset),
+                  "Sukupuoli: %s" % gender, fill=color, font=font)
 
 
 def main(input_video_path, output_video_path,
@@ -229,6 +217,7 @@ def main(input_video_path, output_video_path,
             im = Image.open(io.BytesIO(im_bytes))
 
             if not faces or not genders_ages or i % 2 == 0:
+                # Make new detections every second frame
                 faces = detect_face(im_bytes)
                 genders_ages = detect_genders_ages(gender_age_predictor,
                                                    gender_age_pred_im_size,
