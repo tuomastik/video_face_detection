@@ -2,12 +2,12 @@
 
 A small Python program which adds a face, gender and age detection annotations to a video.
 
-* The face detection is made with Google Cloud Vision API.
+* The face detection is made with [Google Cloud Vision API](https://cloud.google.com/vision/).
 * The gender and age detections are made with [pre-trained Keras CNN by yu4u](https://github.com/yu4u/age-gender-estimation).
 
 ## Example output
 
-<img src="example_output.gif" width="400">
+<img src="example_output.gif" width="600">
 
 ## Installation and usage instructions
 
