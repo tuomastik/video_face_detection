@@ -8,9 +8,6 @@ import subprocess
 from sys import platform as _platform
 from shutil import copyfile
 
-gender_age_pred_repo_dir = 'age-gender-estimation'
-sys.path.insert(0, gender_age_pred_repo_dir)
-
 import numpy as np
 from scipy.misc import imresize, imread
 from google.cloud import vision
@@ -18,7 +15,17 @@ from google.cloud.vision import types
 from PIL import Image, ImageDraw, ImageFont
 from keras.utils.data_utils import get_file
 
+gender_age_pred_repo_dir = 'age-gender-estimation'
+sys.path.insert(0, gender_age_pred_repo_dir)
+
 from wide_resnet import WideResNet
+
+
+class Language:
+    def __init__(self):
+        pass
+    english = 1
+    finnish = 2
 
 
 FRAME_FNAME = "frame_%06d.png"
@@ -119,7 +126,13 @@ def round_to_lower_even(f):
 
 
 def detect_genders_ages(gender_age_predictor, gender_age_pred_im_size,
-                        im, faces):
+                        im, faces, language):
+    if language == Language.english:
+        male, female = "male", "female"
+    elif language == Language.finnish:
+        male, female = "mies", "nainen"
+    else:
+        raise Exception("Unknown language")
     genders_ages = []
     for face in faces:
         box = [(vertex.x, vertex.y) for vertex in face.bounding_poly.vertices]
@@ -135,7 +148,7 @@ def detect_genders_ages(gender_age_predictor, gender_age_pred_im_size,
         face_im = np.expand_dims(face_im, axis=0)
         predictions = gender_age_predictor.predict(face_im)
         # Format predictions
-        gender = "nainen" if predictions[0][0][0] > 0.5 else "mies"
+        gender = female if predictions[0][0][0] > 0.5 else male
         potential_ages = np.arange(0, 101).reshape(101, 1)
         age = int(predictions[1][0].dot(potential_ages).flatten())
         genders_ages.append([gender, age])
@@ -149,42 +162,77 @@ def highlight_faces_outlines(faces, draw, width, color):
         draw.line(box + [box[0]], width=width, fill=color)
 
 
-def highlight_faces_parts(faces, draw, width, color):
+def highlight_faces_parts(faces, draw, width, color,
+                          draw_eyes, draw_eyebrows, draw_mouth, draw_nose):
     for face in faces:
-        # Left eye
-        draw.line([(face.landmarks[ix].position.x,
-                    face.landmarks[ix].position.y) for ix in
-                   [17, 18, 19, 16, 17]], width=width, fill=color)
-        # Right eye
-        draw.line([(face.landmarks[ix].position.x,
-                    face.landmarks[ix].position.y) for ix in
-                   [21, 22, 23, 24, 21]], width=width, fill=color)
-        # Mouth
-        draw.line([(face.landmarks[ix].position.x,
-                    face.landmarks[ix].position.y) for ix in
-                   [10, 8, 11, 9, 10, 12, 11]], width=width, fill=color)
+        if draw_eyes:
+            for side in ["LEFT", "RIGHT"]:
+                eye_landmarks = []
+                for eye_part in ["%s_EYE_RIGHT_CORNER", "%s_EYE_BOTTOM_BOUNDARY", "%s_EYE_LEFT_CORNER",
+                                 "%s_EYE_TOP_BOUNDARY", "%s_EYE_RIGHT_CORNER"]:
+                    eye_part_dict = [
+                        d for d in face.landmarks if
+                        d.type == getattr(vision.enums.FaceAnnotation.Landmark.Type, eye_part % side)][0]
+                    eye_landmarks.append((eye_part_dict.position.x, eye_part_dict.position.y))
+                    draw.line(eye_landmarks, width=width, fill=color)
+        if draw_eyebrows:
+            for side in ["LEFT", "RIGHT"]:
+                eyebrow_landmarks = []
+                for eyebrow_part in ["LEFT_OF_%s_EYEBROW", "%s_EYEBROW_UPPER_MIDPOINT", "RIGHT_OF_%s_EYEBROW"]:
+                    eyebrow_part_dict = [
+                        d for d in face.landmarks if
+                        d.type == getattr(vision.enums.FaceAnnotation.Landmark.Type, eyebrow_part % side)][0]
+                    eyebrow_landmarks.append((eyebrow_part_dict.position.x, eyebrow_part_dict.position.y))
+                    draw.line(eyebrow_landmarks, width=width, fill=color)
+        if draw_mouth:
+            mouth_landmarks = []
+            for mouth_part in ["MOUTH_LEFT", "UPPER_LIP", "MOUTH_RIGHT", "LOWER_LIP",
+                               "MOUTH_LEFT", "MOUTH_CENTER", "MOUTH_RIGHT"]:
+                mouth_part_dict = [
+                    d for d in face.landmarks if
+                    d.type == getattr(vision.enums.FaceAnnotation.Landmark.Type, mouth_part)][0]
+                mouth_landmarks.append((mouth_part_dict.position.x, mouth_part_dict.position.y))
+                draw.line(mouth_landmarks, width=width, fill=color)
+        if draw_nose:
+            nose_landmarks = []
+            for nose_part in ["NOSE_TIP", "NOSE_BOTTOM_RIGHT", "NOSE_BOTTOM_CENTER",
+                              "NOSE_BOTTOM_LEFT", "NOSE_TIP", "MIDPOINT_BETWEEN_EYES"]:
+                nose_part_dict = [
+                    d for d in face.landmarks if
+                    d.type == getattr(vision.enums.FaceAnnotation.Landmark.Type, nose_part)][0]
+                nose_landmarks.append((nose_part_dict.position.x, nose_part_dict.position.y))
+                draw.line(nose_landmarks, width=width, fill=color)
 
 
-def highlight_genders_ages(faces, genders_ages, draw, color, font_size):
+def highlight_genders_ages(faces, genders_ages, draw, color, font, font_size, language):
     try:
-        font = ImageFont.truetype("Montserrat-Bold.ttf", font_size)
+        font = ImageFont.truetype(font, font_size)
     except Exception:
         font = ImageFont.load_default()
 
-    width_offset, height_offset = 20, 30
+    width_offset, height_offset = 20, 50
+
+    if language == Language.english:
+        age_text, gender_text = "Age", "Gender"
+    elif language == Language.finnish:
+        age_text, gender_text = "Ikä", "Sukupuoli"
+    else:
+        raise Exception("Unknown language")
 
     for face, (gender, age) in zip(faces, genders_ages):
         box = [(vertex.x, vertex.y) for vertex in face.bounding_poly.vertices]
         draw.text((box[0][0] + width_offset, box[2][1] - height_offset * 2),
-                  "Ikä: %i" % age, fill=color, font=font)
+                  "%s: %i" % (age_text, age), fill=color, font=font)
         draw.text((box[0][0] + width_offset, box[2][1] - height_offset),
-                  "Sukupuoli: %s" % gender, fill=color, font=font)
+                  "%s: %s" % (gender_text, gender), fill=color, font=font)
 
 
 def main(input_video_path, output_video_path,
          detection_start_time=None, detection_end_time=None,
-         highlight_color='#00ff00', font_size=22,
-         line_width_rectangle=5, line_width_face_parts=1):
+         highlight_color='#00ff00', font=None, font_size=22,
+         line_width_rectangle=5, line_width_face_parts=1,
+         language=Language.english,
+         draw_eyes=True, draw_eyebrows=True, draw_mouth=True, draw_nose=True):
 
     gender_age_predictor, gender_age_pred_im_size = get_gender_age_predictor()
 
@@ -217,27 +265,24 @@ def main(input_video_path, output_video_path,
             im = Image.open(io.BytesIO(im_bytes))
 
             if not faces or not genders_ages or i % 2 == 0:
-                # Make new detections every second frame
+                # Make new detections every 2nd frame
                 faces = detect_face(im_bytes)
-                genders_ages = detect_genders_ages(gender_age_predictor,
-                                                   gender_age_pred_im_size,
-                                                   np.array(im), faces)
+                genders_ages = detect_genders_ages(gender_age_predictor, gender_age_pred_im_size,
+                                                   np.array(im), faces, language)
 
             draw = ImageDraw.Draw(im)
 
-            highlight_faces_parts(faces, draw, line_width_face_parts,
-                                  highlight_color)
-            highlight_faces_outlines(faces, draw, line_width_rectangle,
-                                     highlight_color)
-            highlight_genders_ages(faces, genders_ages, draw, highlight_color,
-                                   font_size)
+            highlight_faces_parts(faces, draw, line_width_face_parts, highlight_color,
+                                  draw_eyes, draw_eyebrows, draw_mouth, draw_nose)
+            highlight_faces_outlines(faces, draw, line_width_rectangle, highlight_color)
+            highlight_genders_ages(faces, genders_ages, draw, highlight_color, font, font_size,
+                                   language)
 
             im.save(im_out_path)
 
     # Convert frames to soundless video
     _, file_ext = os.path.splitext(output_video_path)
-    soundless_video_path = output_video_path.replace(file_ext,
-                                                     "_soundless" + file_ext)
+    soundless_video_path = output_video_path.replace(file_ext, "_soundless" + file_ext)
     convert_frames_to_video(output_frames_path, soundless_video_path, fps)
 
     # Add sound from the input video to the final output video
@@ -247,8 +292,8 @@ def main(input_video_path, output_video_path,
         output_video_path=output_video_path)
 
 
-main(input_video_path="input.mp4",
-     output_video_path="input_annotated.mp4",
-     detection_start_time=2, detection_end_time=4,
-     highlight_color="#00ff00", font_size=12,
-     line_width_rectangle=2, line_width_face_parts=2)
+main(input_video_path="1.mp4", output_video_path="1_annotated.mp4",
+     detection_start_time=None, detection_end_time=None,
+     highlight_color="#00ff00", font="Montserrat-Bold.ttf", font_size=32,
+     line_width_rectangle=4, line_width_face_parts=4, language=Language.english,
+     draw_eyes=True, draw_eyebrows=True, draw_mouth=True, draw_nose=True)
